@@ -102,6 +102,10 @@ the existing integration; the listing is the current truth.
   the user what it means for the video ([guiding the user](guiding-the-user.md#when-the-plan-cannot-be-realized-as-agreed)).
   Uploaded references are remembered by content in the manifest and reused on a retry.
 - **Rate**: five generation calls per minute per key. `bibei.mjs` waits out a rate limit by itself.
+- **Concurrency**: the account's membership tier sets how many tasks run at once; a free-tier account
+  runs one, so video clips are generated one after another (about 2–3 minutes each, measured
+  2026-09-24). Plan and quote waiting time from that queue, and submit early
+  ([submit early, collect as results arrive](../3-materials/generation-requests.md#submit-early-collect-as-results-arrive)).
 - **Alignment**: a draft capability; see [Alignment](#alignment).
 
 `bibei.mjs` refuses a video request outside these limits before anything is uploaded or charged.
@@ -237,7 +241,7 @@ and `bibei.mjs` prints the HTTP status, code and request id.
 | "rate limited; retrying" | Normal; the script waits and continues. |
 | "cannot reach …" after retries | A network route problem on this machine; check connectivity or proxy before anything else. |
 | A task ends `failed`, `cancelled` or `degraded` | Read its message. Change the prompt, references or parameters for a real reason, then submit a new version deliberately with `--replace`; that is a new paid request. |
-| "still … after 40 min" or a failed download | The task is recorded; resume with `bibei.mjs wait <name> --dir composition/generated`. Nothing is charged again. |
+| "still … after 40 min" or a failed download | The task is recorded; resume with `bibei.mjs wait <name>`, or `bibei.mjs wait-all` for every unfinished task. Nothing is charged again. |
 
 An isolated error does not prove that payment or another key will fix the request. Keep independent
 work moving while a capability is unavailable—reference reading, script, scene design, composition

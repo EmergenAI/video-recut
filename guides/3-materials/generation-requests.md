@@ -244,8 +244,8 @@ the speech file's content.
 - **Same name, same request, finished:** the files are reused and nothing is charged. Re-running a
   command is therefore safe.
 - **Same name, same request, still running:** the script resumes waiting on the same task. An
-  interrupted wait (closed terminal, 40-minute wait limit) resumes with the same command or with
-  `bibei.mjs wait <name> --dir composition/generated`.
+  interrupted wait (closed terminal, 40-minute wait limit) resumes with the same command, with
+  `bibei.mjs wait <name>`, or with `bibei.mjs wait-all` for everything still running.
 - **Same name, different request:** refused. Pass `--replace` to submit the new request under that name.
   The previous version is kept: its files are renamed to `<name>@<submitted time>.<ext>` and its manifest
   entry moves to that name, so the new result takes the plain name the page already refers to. Compare
@@ -258,19 +258,45 @@ the speech file's content.
 - **Resubmission never charges twice:** each attempt carries an Idempotency-Key derived from the request
   itself, so a resubmission after a lost response returns the original task.
 
-Submit several independent requests without waiting, then collect them:
+### Submit early, collect as results arrive
+
+Generation time is mostly waiting in Bibei's queue, and the queue is per account: an account may run
+only one task at a time (a free-tier account does), so tasks submitted together still finish one after
+another. In a measured run on 2026-09-24, four 3–6 s videos each took 2–3 minutes to generate but
+finished at +2.5, +7.5, +10 and +12 minutes. So the order and the moment you submit decide how long
+the production takes:
+
+1. **Submit each request the moment its inputs exist.** A video whose reference image is ready goes in
+   now, even while other images are still being made; do not wait for a whole batch.
+2. **Submit in the order you need the results:** the shot that unblocks the most composition work
+   first, then the others. When the queue is serial, the last request submitted is the last to finish.
+3. **Submit with `--no-wait`, then collect everything with one `wait-all`.** It watches every unfinished
+   task at once and downloads each result the moment it is ready (`[2/4] v3 ready after 450s`), so a
+   finished shot is never left sitting on the server while you wait for another. One failure does not
+   stop the rest; they are listed at the end and the command exits non-zero.
+4. **Work while it runs.** Build the timeline, the page and the scenes with placeholders; drop each
+   shot in as `wait-all` reports it. If the host can run a command in the background, run `wait-all`
+   that way; otherwise run it and continue as soon as it returns.
 
 ```bash
-node <skill>/scripts/bibei.mjs image shot1 --model <key> --prompt-file prompts/shot1.txt --ratio 9:16 --dir composition/generated --no-wait
-node <skill>/scripts/bibei.mjs image shot2 --model <key> --prompt-file prompts/shot2.txt --ratio 9:16 --dir composition/generated --no-wait
-node <skill>/scripts/bibei.mjs status --dir composition/generated
-node <skill>/scripts/bibei.mjs wait shot1 --dir composition/generated
-node <skill>/scripts/bibei.mjs wait shot2 --dir composition/generated
+node <skill>/scripts/bibei.mjs image shot1 --model <key> --prompt-file prompts/shot1.txt --ratio 9:16 --no-wait
+node <skill>/scripts/bibei.mjs wait-all shot1
+node <skill>/scripts/bibei.mjs video clip1 --model <key> --prompt-file prompts/clip1.txt --duration 5 --ref-image composition/generated/shot1.png --no-wait
+node <skill>/scripts/bibei.mjs image shot2 --model <key> --prompt-file prompts/shot2.txt --ratio 9:16 --ref composition/generated/shot1.png --no-wait
+node <skill>/scripts/bibei.mjs wait-all shot2
+node <skill>/scripts/bibei.mjs video clip2 --model <key> --prompt-file prompts/clip2.txt --duration 6 --ref-image composition/generated/shot2.png --no-wait
+node <skill>/scripts/bibei.mjs wait-all
 ```
 
+(`--dir` defaults to `composition/generated` when run from the production root.) Several `bibei.mjs`
+commands may run at the same time; the manifest is updated under a lock, so none loses another's
+record. Tell the user the expected wait from the queue, not from one clip's length: with a serial
+account, about 2–3 minutes per video clip, one after another.
+
 `status` lists every entry with its kind, status, task id and files; use it before a revision to see
-what already exists. If a finished entry's files were deleted, `wait <name>` downloads them again from
-the task; the download links are signed and may expire.
+what already exists. `wait-all` (or `wait <name>`) also recovers an entry that shows `queued` although
+the task finished, and downloads again any finished result whose files were deleted; the download links
+are signed and may expire.
 
 A failed or cancelled task is recorded with Bibei's error code and message; the command exits with the
 error. Read it before retrying: a content or parameter problem needs a changed request (`--replace`, or

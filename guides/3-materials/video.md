@@ -238,6 +238,11 @@ Reference guidance is a good basis for controlled production anyway. How it maps
 - **One scene per request.** This is the default. Asking one request for several scenes (the sofa,
   then the sunset) is unreliable: the result tends to stay in one place. Make one request per scene
   with the same reference images and cut them together in the composition.
+- **Every clip costs queue time.** On an account that runs one task at a time, each clip adds about
+  2–3 minutes of waiting, whatever its length. Plan as many clips as the piece needs, not more: a still
+  with a slow push-in in the composition can carry a beat that does not need performed motion. Submit
+  each clip as soon as its reference image exists, most-needed first, and collect with `wait-all`
+  ([submit early](generation-requests.md#submit-early-collect-as-results-arrive)).
 - **Several views of one scene in one request.** Several reference images can guide different angles
   of the same place. Say which people, scene or state each contributes and how the passage moves
   between them. None becomes a literal first or last frame.

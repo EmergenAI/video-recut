@@ -9,6 +9,8 @@
 //                                [--resolution 768p|480p] [--ref-image a.jpg] [--ref-audio v.mp3]
 //   node bibei.mjs align <name> <speech-audio> --language zh [--model <key>]
 //   node bibei.mjs wait <name> | status [<name>]
+//   node bibei.mjs wait-all [<name> ...]   (waits for every unfinished task at once and downloads
+//                                  each result the moment it is ready; one failure does not stop the rest)
 //   node bibei.mjs key            (is a key configured, and how to set one up; never prints it)
 //   node bibei.mjs key --open     (creates the key file and opens it in the system text editor
 //                                  for the user to paste the token into; never reads it)
@@ -22,7 +24,7 @@
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +54,9 @@ const STOP_CODES = new Set(["INSUFFICIENT_POINTS", "TOKEN_DAILY_LIMIT_EXCEEDED"]
 class BibeiError extends Error {
   constructor(code, message, status) { super(message); this.code = code; this.status = status; }
 }
+
+// A task that ended without a usable result; the caller decides whether that ends the run.
+class TaskError extends Error {}
 
 function fail(message, code = 1) {
   console.error(`error: ${message}`);
@@ -197,12 +202,49 @@ async function loadManifest(dir) {
   return { file, data: JSON.parse(await readFile(file, "utf8")) };
 }
 
-async function saveManifest(manifest) {
-  await mkdir(resolve(manifest.file, ".."), { recursive: true });
-  const temp = `${manifest.file}.tmp`;
-  await writeFile(temp, `${JSON.stringify(manifest.data, null, 2)}\n`);
-  await rename(temp, manifest.file);
+// Several bibei.mjs processes may run at once (an agent submitting or waiting in parallel). Each change
+// is applied under a lock to the manifest as it is on disk now, so no process overwrites another's entry.
+const LOCK_STALE_MS = 120_000;
+const LOCK_WAIT_MS = 60_000;
+
+async function withManifestLock(dir, action) {
+  await mkdir(dir, { recursive: true });
+  const lock = join(dir, "manifest.json.lock");
+  const started = Date.now();
+  let handle;
+  while (!handle) {
+    try {
+      handle = await open(lock, "wx");
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
+      if (age > LOCK_STALE_MS) { await unlink(lock).catch(() => {}); continue; } // left by a killed process
+      if (Date.now() - started > LOCK_WAIT_MS) fail(`${lock} has been held for over a minute; if no other bibei.mjs is running, delete it`);
+      await sleep(50 + Math.random() * 150);
+    }
+  }
+  try {
+    await handle.writeFile(`${process.pid}\n`);
+    return await action();
+  } finally {
+    await handle.close();
+    await unlink(lock).catch(() => {});
+  }
 }
+
+// Reads the manifest fresh, applies `mutate` to its data, and writes it back atomically.
+async function updateManifest(dir, mutate) {
+  return withManifestLock(dir, async () => {
+    const manifest = await loadManifest(dir);
+    mutate(manifest.data);
+    const temp = `${manifest.file}.${process.pid}.tmp`;
+    await writeFile(temp, `${JSON.stringify(manifest.data, null, 2)}\n`);
+    await rename(temp, manifest.file);
+    return manifest.data;
+  });
+}
+
+const putEntry = (dir, entry) => updateManifest(dir, (data) => { data.entries[entry.name] = entry; });
 
 async function sha256(file) {
   return createHash("sha256").update(await readFile(file)).digest("hex");
@@ -274,17 +316,16 @@ async function prepareGeneration(kind, name, flags) {
 
 // Uploaded references are remembered by content in the manifest, so a resubmission under the same
 // Idempotency-Key sends the same asset ids and Bibei recognizes it as the same request.
-async function assetFor(manifest, file, contentKey) {
-  manifest.data.assets ??= {};
-  if (manifest.data.assets[contentKey]) return manifest.data.assets[contentKey];
+async function assetFor(dir, file, contentKey) {
+  const known = (await loadManifest(dir)).data.assets?.[contentKey];
+  if (known) return known;
   const id = await uploadAsset(file);
-  manifest.data.assets[contentKey] = id;
-  await saveManifest(manifest);
+  await updateManifest(dir, (data) => { data.assets ??= {}; data.assets[contentKey] ??= id; });
   return id;
 }
 
-async function submit(kind, spec, idempotency, manifest) {
-  const upload = async (list) => { const ids = []; for (const r of list) ids.push(await assetFor(manifest, r.path, r.sha256)); return ids; };
+async function submit(kind, spec, idempotency, dir) {
+  const upload = async (list) => { const ids = []; for (const r of list) ids.push(await assetFor(dir, r.path, r.sha256)); return ids; };
   if (kind === "image") {
     const imageAssetIds = await upload(spec.refs);
     const body = {
@@ -306,7 +347,7 @@ async function submit(kind, spec, idempotency, manifest) {
     };
     return call("/videos", { method: "POST", body: JSON.stringify(body), headers: { "idempotency-key": idempotency } });
   }
-  const audioAssetId = await assetFor(manifest, spec.evidence, `align-evidence:${spec.sourceSha256}`);
+  const audioAssetId = await assetFor(dir, spec.evidence, `align-evidence:${spec.sourceSha256}`);
   const body = { modelKey: spec.model, audioAssetId, language: spec.language };
   return call("/alignments", { method: "POST", body: JSON.stringify(body), headers: { "idempotency-key": idempotency } });
 }
@@ -319,14 +360,14 @@ function extensionFor(mediaType, url, kind) {
   return kind === "video" ? ".mp4" : ".png";
 }
 
-async function wait(entry, manifest, dir) {
+async function wait(entry, dir) {
   const started = Date.now();
   let lastStatus = "";
   while (true) {
     const task = await call(`/tasks/${encodeURIComponent(entry.taskId)}`);
     const status = String(task.status ?? "");
     if (status !== lastStatus) { console.log(`${entry.name}: ${status || "pending"}`); lastStatus = status; }
-    if (TERMINAL.has(status)) return finish(entry, task, manifest, dir);
+    if (TERMINAL.has(status)) return finish(entry, task, dir);
     if (Date.now() - started > WAIT_LIMIT_MS) {
       console.log(`${entry.name}: still ${status} after ${WAIT_LIMIT_MS / 60_000} min; resume with \`bibei.mjs wait ${entry.name}\``);
       process.exit(2);
@@ -335,28 +376,30 @@ async function wait(entry, manifest, dir) {
   }
 }
 
-async function finish(entry, task, manifest, dir) {
+// Records the terminal task and downloads its result. Throws TaskError when there is no usable result.
+async function finish(entry, task, dir) {
   entry.status = String(task.status);
   entry.completedAt = new Date().toISOString();
+  if (task.finishedAt) entry.finishedAt = task.finishedAt;
   if (entry.kind === "align") {
     if (task.status !== "succeeded" || !task.result) {
       entry.error = task.error ?? { code: "ALIGNMENT_FAILED", message: "no result" };
-      await saveManifest(manifest);
-      fail(`${entry.name}: alignment ${task.status}: ${redact(entry.error.message ?? entry.error.code)}`);
+      await putEntry(dir, entry);
+      throw new TaskError(`${entry.name}: alignment ${task.status}: ${redact(entry.error.message ?? entry.error.code)}`);
     }
     const file = join(dir, `${entry.name}.alignment.json`);
     await writeFile(file, `${JSON.stringify({ source: entry.source, language: entry.language, ...task.result }, null, 2)}\n`);
     entry.outputs = [relative(dir, file)];
-    await saveManifest(manifest);
+    await putEntry(dir, entry);
     console.log(`${entry.name}: wrote ${file}`);
-    return;
+    return entry;
   }
   // Bibei may return a site-relative file path ("/api/open/v1/files/…"); it resolves against the API root's origin.
   const urls = (Array.isArray(task.artifacts) ? task.artifacts : []).map((a) => a?.url).filter((u) => typeof u === "string" && u.length > 0)
     .map((u) => new URL(u, `${BASE}/`).href).filter((u) => /^https?:\/\//u.test(u));
   if (urls.length === 0) {
     entry.error = task.error ?? { code: "NO_ARTIFACT", message: `task ${task.status} without artifacts` };
-    await saveManifest(manifest);
+    await putEntry(dir, entry);
     // A video with reference files that fails within a minute never reached generation; the usual cause
     // is a Bibei server that cannot serve the references to the video workflow, not the prompt.
     const quick = Date.parse(task.finishedAt ?? "") - Date.parse(task.submittedAt ?? entry.submittedAt ?? "") < 60_000;
@@ -364,20 +407,82 @@ async function finish(entry, task, manifest, dir) {
     const hint = entry.kind === "video" && withRefs && quick && entry.error.code === "PROVIDER_ERROR"
       ? "\nLikely cause: the video workflow could not fetch the reference files from this Bibei server, so reference-image video is unavailable right now. Changing the prompt will not fix it. Tell the user what that means for the video (guides/1-setup/guiding-the-user.md) before switching to prompt-only shots."
       : "";
-    fail(`${entry.name}: ${task.status}: ${redact(entry.error.message ?? entry.error.code)}${hint}`);
+    throw new TaskError(`${entry.name}: ${task.status}: ${redact(entry.error.message ?? entry.error.code)}${hint}`);
   }
   entry.outputs = [];
   for (const [i, url] of urls.entries()) {
     // Artifact URLs are signed and take no Authorization header.
     const response = await fetch(url, { signal: AbortSignal.timeout(300_000) });
-    if (!response.ok) fail(`${entry.name}: download failed with HTTP ${response.status}; retry with \`bibei.mjs wait ${entry.name}\``);
+    if (!response.ok) throw new TaskError(`${entry.name}: download failed with HTTP ${response.status}; retry with \`bibei.mjs wait ${entry.name}\``);
     const bytes = Buffer.from(await response.arrayBuffer());
     const file = join(dir, `${entry.name}${urls.length > 1 ? `-${i + 1}` : ""}${extensionFor(response.headers.get("content-type")?.split(";")[0], url, entry.kind)}`);
     await writeFile(file, bytes);
     entry.outputs.push(relative(dir, file));
     console.log(`${entry.name}: saved ${file}`);
   }
-  await saveManifest(manifest);
+  await putEntry(dir, entry);
+  return entry;
+}
+
+// Waits for every unfinished task in the manifest (or the named ones) at the same time and collects
+// each result the moment Bibei reports it, so a finished shot is usable while later ones still run.
+async function waitAll(dir, names) {
+  const { data } = await loadManifest(dir);
+  const wanted = names.length ? names : Object.keys(data.entries);
+  const missing = names.filter((n) => !data.entries[n]?.taskId);
+  if (missing.length) fail(`no submitted task named ${missing.join(", ")} in ${join(dir, "manifest.json")}`);
+  const pending = wanted.map((n) => data.entries[n]).filter((e) => e?.taskId && (
+    !TERMINAL.has(e.status) || (e.status === "succeeded" && !(e.outputs ?? []).length)
+    || (e.status === "succeeded" && !(e.outputs ?? []).every((f) => existsSync(join(dir, f))))));
+  // Tasks that already ended without a result are not waited for, but they are not silently fine either.
+  // (Names with "@" are replaced versions kept for reference.)
+  const failedBefore = wanted.map((n) => data.entries[n])
+    .filter((e) => e?.taskId && !e.name.includes("@") && TERMINAL.has(e.status) && e.status !== "succeeded")
+    .map((e) => `${e.name}: ${e.status} earlier (${redact(e.error?.message ?? e.error?.code ?? "no result")}); change the request (--replace) or re-run its command to retry`);
+  if (pending.length === 0) {
+    if (failedBefore.length) fail(`nothing is running, but ${failedBefore.length} task(s) have no result:\n${failedBefore.join("\n")}`);
+    console.log("nothing to wait for: every submitted task has its result");
+    return;
+  }
+  const total = pending.length;
+  console.log(`waiting for ${total} task(s): ${pending.map((e) => e.name).join(", ")}`);
+  const started = Date.now();
+  const failures = [];
+  let done = 0;
+  const last = new Map();
+  while (pending.length) {
+    for (const entry of [...pending]) {
+      let task;
+      try { task = await call(`/tasks/${encodeURIComponent(entry.taskId)}`); } catch (error) {
+        if (error instanceof BibeiError && STOP_CODES.has(error.code)) throw error;
+        console.log(`${entry.name}: could not read status (${error.message}); will retry`);
+        continue;
+      }
+      const status = String(task.status ?? "");
+      if (last.get(entry.name) !== status) { last.set(entry.name, status); if (!TERMINAL.has(status)) console.log(`${entry.name}: ${status || "pending"}`); }
+      if (!TERMINAL.has(status)) continue;
+      pending.splice(pending.indexOf(entry), 1);
+      done += 1;
+      try {
+        await finish(entry, task, dir);
+        console.log(`[${done}/${total}] ${entry.name} ready after ${Math.round((Date.now() - started) / 1000)}s`);
+      } catch (error) {
+        if (!(error instanceof TaskError)) throw error;
+        failures.push(error.message);
+        console.log(`[${done}/${total}] ${error.message}`);
+      }
+    }
+    if (!pending.length) break;
+    if (Date.now() - started > WAIT_LIMIT_MS) {
+      console.log(`still running after ${WAIT_LIMIT_MS / 60_000} min: ${pending.map((e) => e.name).join(", ")}; resume with \`bibei.mjs wait-all\``);
+      process.exit(2);
+    }
+    await sleep(POLL_MS);
+  }
+  if (failures.length || failedBefore.length) {
+    fail([`${failures.length} of ${total} task(s) ended without a result`, ...failures, ...failedBefore].join("\n"));
+  }
+  console.log(`all ${total} task(s) ready`);
 }
 
 // Alignment evidence is canonical 16 kHz mono 16-bit PCM WAV, converted locally.
@@ -392,6 +497,7 @@ async function evidenceWav(source) {
 
 async function generate(kind, positional, flags) {
   const dir = resolve(typeof flags.dir === "string" ? flags.dir : join("composition", "generated"));
+  // The decision below uses this snapshot; every write re-reads the manifest under the lock.
   const manifest = await loadManifest(dir);
   const name = positional[0];
   let spec;
@@ -422,7 +528,7 @@ async function generate(kind, positional, flags) {
     }
     if (same && previous.taskId && !TERMINAL.has(previous.status)) {
       console.log(`${name}: resuming task ${previous.taskId}`);
-      if (!flags["no-wait"]) await wait(previous, manifest, dir);
+      if (!flags["no-wait"]) await wait(previous, dir);
       return;
     }
     if (previous && flags.replace && !same) {
@@ -437,9 +543,10 @@ async function generate(kind, positional, flags) {
         await rename(from, to);
         kept.push(relative(dir, to));
       }
-      manifest.data.entries[version] = { ...previous, name: version, outputs: kept };
-      delete manifest.data.entries[name];
-      await saveManifest(manifest);
+      await updateManifest(dir, (data) => {
+        data.entries[version] = { ...previous, name: version, outputs: kept };
+        delete data.entries[name];
+      });
       if (kept.length) console.log(`${name}: previous version kept as ${kept.join(", ")}`);
     }
     // A request whose previous attempt ended without a result is retried as a new attempt; any other
@@ -456,16 +563,16 @@ async function generate(kind, positional, flags) {
       ...(kind === "align" ? { model: spec.model, language: spec.language, source: spec.source } : identity),
       submittedAt: new Date().toISOString(), status: "submitting",
     };
-    const response = await submit(kind, kind === "align" ? spec : identity, idempotency, manifest);
+    const response = await submit(kind, kind === "align" ? spec : identity, idempotency, dir);
     if (typeof response.taskId !== "string" || !response.taskId) throw new BibeiError("BAD_RESPONSE", "Bibei returned no taskId");
     entry.taskId = response.taskId;
     entry.idempotencyKey = idempotency;
     entry.status = String(response.status ?? "queued");
-    manifest.data.entries[name] = entry;
-    await saveManifest(manifest);
+    await putEntry(dir, entry);
     console.log(`${name}: submitted task ${entry.taskId}`);
-    if (!flags["no-wait"]) await wait(entry, manifest, dir);
+    if (!flags["no-wait"]) await wait(entry, dir);
   } catch (error) {
+    if (error instanceof TaskError) fail(error.message);
     if (error instanceof BibeiError) {
       if (error.status === 404 && kind === "align") fail(`Bibei alignment is not available at ${API}/alignments (${error.code}); check \`bibei.mjs models\` for an "alignment" group`);
       fail(STOP_CODES.has(error.code) ? `${error.message}\nThis is an account limit: tell the user instead of retrying.` : error.message);
@@ -492,9 +599,10 @@ try {
       const entry = manifest.data.entries[rest[0]];
       if (!entry?.taskId) fail(`no submitted task named ${rest[0]} in ${manifest.file}`);
       if (entry.status === "succeeded" && entry.outputs?.every((f) => existsSync(join(dir, f)))) { console.log(`${entry.name}: done: ${entry.outputs.join(", ")}`); break; }
-      await wait(entry, manifest, dir);
+      await wait(entry, dir);
       break;
     }
+    case "wait-all": await waitAll(resolve(typeof flags.dir === "string" ? flags.dir : join("composition", "generated")), rest); break;
     case "status": {
       const dir = resolve(typeof flags.dir === "string" ? flags.dir : join("composition", "generated"));
       const { data } = await loadManifest(dir);
@@ -511,6 +619,7 @@ try {
     }
   }
 } catch (error) {
-  if (error instanceof BibeiError) fail(error.message);
+  if (error instanceof TaskError) fail(error.message);
+  if (error instanceof BibeiError) fail(STOP_CODES.has(error.code) ? `${error.message}\nThis is an account limit: tell the user instead of retrying.` : error.message);
   throw error;
 }
