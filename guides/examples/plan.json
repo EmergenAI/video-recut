@@ -1,0 +1,10 @@
+{
+  "targetDuration": 13.3,
+  "shots": [
+    { "id": "shot1", "scene": "Couple reading in bed, lamp light", "duration": 5, "still": "composition/assets/shot1.jpg" },
+    { "id": "shot2", "scene": "Washing dishes together in the kitchen", "duration": 5.25, "still": "composition/assets/shot2.jpg" },
+    { "id": "shot3", "scene": "Hug at the front door, cat on the sill", "duration": 3, "still": "composition/assets/shot3.jpg" }
+  ],
+  "audio": [],
+  "deviations": []
+}

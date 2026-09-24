@@ -1,0 +1,26 @@
+{
+  "language": "zh",
+  "segments": [
+    {
+      "id": "s1",
+      "speaker": "narrator",
+      "text": "其实我很贪恋你，||主动找我的时刻。",
+      "audio": "composition/audio/s1.wav",
+      "alignment": "composition/generated/s1.alignment.json"
+    },
+    {
+      "id": "s2",
+      "speaker": "narrator",
+      "text": "因为只有这样，我才敢确定，我没有打扰到你",
+      "audio": "composition/audio/s2.wav",
+      "alignment": "composition/generated/s2.alignment.json",
+      "gap": 0.5
+    },
+    {
+      "id": "s3",
+      "speaker": "narrator",
+      "text": "Hi, I'm OK — 2 AI tools.",
+      "audio": "composition/audio/s3.wav"
+    }
+  ]
+}
