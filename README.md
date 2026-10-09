@@ -5,8 +5,6 @@ material. It generates images and video through the user's own Bibei account, us
 speech tool (or a TTS service the user names), and composes and renders the result as an HTML
 composition with HyperFrames and FFmpeg.
 
-Website: https://emergenai.github.io/video-recut/
-
 ## Install
 
 ```bash
