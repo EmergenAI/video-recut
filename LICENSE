@@ -1,21 +1,136 @@
-MIT License
+Video Recut 许可协议 / Video Recut License
 
-Copyright (c) 2026 EmergenAI
+版权所有 (c) 2026 EmergenAI。保留所有未明确授予的权利。
+Copyright (c) 2026 EmergenAI. All rights not expressly granted are reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+本协议以中英文两种语言写成。两种版本如有不一致，以中文版本为准。
+This license is written in Chinese and English. If the two versions differ, the Chinese version
+prevails.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+================================================================================
+中文版本
+================================================================================
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+「本软件」指本仓库中的全部文件，包括 SKILL.md、guides/、scripts/ 及其中的文字、提示词、代码和
+示例。「你」指获得本软件的个人或组织。「版权方」指 EmergenAI。
+
+一、允许你做的事
+
+1. 下载、安装并运行本软件，用途不限，包括商业用途。组织可以把本软件安装给其成员在本组织内部使用。
+2. 用本软件制作视频及其他成果（以下简称「产出」），并以任何方式使用产出，包括商业使用。产出
+   归你所有，版权方不对产出主张任何权利。
+3. 修改本软件。修改后的版本可以自用或在本组织内部使用；如需公开发布，适用第 4 项。
+4. 免费公开发布、转发本软件或其修改版本，但必须同时满足：
+   (1) 保留本协议和版权声明，在显著位置注明原作者「EmergenAI」及官方仓库链接
+       https://github.com/EmergenAI/video-recut；
+   (2) 如果是修改版本，须在显著位置写明「本版本经过修改，并非官方版本」，并说明主要改动；
+   (3) 修改版本继续适用本协议，不得以其他许可证发布。
+   依本项发布的修改版本，不视为违反第二条第 3、4 项。
+5. 在文章、教程、评测等内容中引用本软件的片段，但必须注明作者「EmergenAI」及官方仓库链接。引用
+   不得用于第二条第 3、4 项所禁止的用途。
+
+二、不允许你做的事
+
+除非事先取得版权方的书面授权，你不得：
+
+1. 在不注明作者、或不标明修改的情况下，发布、转发本软件或其任何部分（含修改版本）；
+2. 出售、出租、出借、再许可本软件，或以本软件收费；
+3. 将本软件或其任何部分（包括其中的文字、提示词、流程和代码）纳入其他软件、技能包、插件、在线
+   服务或产品中，或以本软件为基础向他人提供托管服务；
+4. 借助本软件的内容制作与之竞争的软件、技能包或服务；
+5. 删除或修改本软件中的版权声明和本协议。
+
+三、授权与联系
+
+如需上述第二条所列的任何权利，或需要商业授权、定制或合作，请通过官方仓库联系版权方：
+https://github.com/EmergenAI/video-recut
+
+版权方书面指定的人员，可以在版权方授权的范围内修改和发布本软件。
+
+四、第三方软件和服务
+
+本软件运行时安装或调用的第三方软件，各自遵循其许可证，见 THIRD_PARTY_NOTICES.md。通过必贝开放
+平台或其他服务生成的内容，同时受这些服务条款的约束。
+
+五、终止
+
+如果你违反本协议，你依本协议获得的全部权利自动终止，你应停止使用并删除本软件的全部副本。你在
+终止前合法制作的产出不受影响。
+
+六、免责声明
+
+本软件按「现状」提供，不附带任何明示或默示的保证，包括但不限于适销性、特定用途适用性和不侵权的
+保证。在任何情况下，版权方均不对因本软件或本软件的使用而产生的任何索赔、损害或其他责任负责，
+包括使用本软件过程中在第三方服务上产生的费用。
+
+================================================================================
+English version
+================================================================================
+
+"Software" means all files in this repository, including SKILL.md, guides/ and scripts/, and the
+text, prompts, code and examples they contain. "You" means the individual or organization that
+obtains the Software. "Licensor" means EmergenAI.
+
+1. What you may do
+
+1.1 Download, install and run the Software for any purpose, including commercial purposes. An
+    organization may install the Software for its members to use within that organization.
+1.2 Use the Software to make videos and other results ("Output"), and use the Output in any way,
+    including commercially. The Output belongs to you; the Licensor claims no rights in it.
+1.3 Modify the Software. A modified version may be used by you or within your organization; to
+    publish it, section 1.4 applies.
+1.4 Publish and redistribute the Software or a modified version of it free of charge, provided
+    that:
+    (a) you keep this license and the copyright notices, and credit the original author
+        "EmergenAI" with a link to the official repository
+        https://github.com/EmergenAI/video-recut in a prominent place;
+    (b) for a modified version, you state prominently that "this version has been modified and is
+        not the official version", and describe the main changes;
+    (c) a modified version remains under this license and may not be released under any other
+        license.
+    A modified version published under this section does not breach sections 2.3 or 2.4.
+1.5 Quote excerpts of the Software in articles, tutorials, reviews and similar content, provided
+    that you credit the author "EmergenAI" with a link to the official repository. Quotations may
+    not be used for any purpose prohibited by sections 2.3 or 2.4.
+
+2. What you may not do
+
+Unless you have the Licensor's prior written permission, you may not:
+
+2.1 publish or redistribute the Software or any part of it (including a modified version)
+    without crediting the author or without marking the modifications;
+2.2 sell, rent, lend or sublicense the Software, or charge for it;
+2.3 incorporate the Software or any part of it (including its text, prompts, workflows and code)
+    into any other software, skill, plugin, online service or product, or offer the Software to
+    others as a hosted service;
+2.4 use the contents of the Software to build competing software, skills or services;
+2.5 remove or alter the copyright notices in the Software or this license.
+
+3. Permissions and contact
+
+For any right listed in section 2, or for a commercial license, customization or partnership,
+contact the Licensor through the official repository:
+https://github.com/EmergenAI/video-recut
+
+Persons designated by the Licensor in writing may modify and publish the Software within the scope
+the Licensor authorizes.
+
+4. Third-party software and services
+
+Third-party software that the Software installs or invokes at run time is distributed under its
+own license; see THIRD_PARTY_NOTICES.md. Content generated through the Bibei open platform or other
+services is also subject to those services' terms.
+
+5. Termination
+
+If you breach this license, all rights granted to you under it end automatically, and you must
+stop using and delete all copies of the Software. Output you lawfully made before termination is
+not affected.
+
+6. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE, INCLUDING CHARGES
+INCURRED ON THIRD-PARTY SERVICES WHILE USING THE SOFTWARE.
