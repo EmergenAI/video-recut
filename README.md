@@ -1,37 +1,68 @@
 # Video Recut
 
-An Agent Skill that directs and produces short videos from a brief, reference videos or supplied
-material. It generates images and video through the user's own Bibei account, uses the host agent's
-speech tool (or a TTS service the user names), and composes and renders the result as an HTML
-composition with HyperFrames and FFmpeg.
+让 AI 助手当导演：给它一句需求、一条参考视频或你自己拍的素材，它从看懂参考、写脚本、选角配音，一路做到字幕、动效、混音和成片，交给你一支**通过验收检查**的短视频，所有源文件都还能改。
 
-## Install
+Video Recut 是一个 Agent Skill（AI 助手的技能包），适用于各种支持 Skill 的 AI 助手。
+
+## 它能做什么
+
+- **从一个想法开始**：比如"给我们的冷萃罐做一条 30 秒的上新视频"。它先写方案给你确认，谈好预算再花钱。
+- **照着一条喜欢的视频改**：比如"照这条来，换成我们的产品和另一个主持人"。它会把参考片从头看到尾，弄清每个镜头、画面和声音为什么在那儿，再按你的台词重新做一遍。
+- **用你自己拍的素材**：每段素材先分好用途，当参考、保留这段表演、单独用作画面，或者只取声音。
+
+已经会做的七种体裁：口播、双人播客、街头采访、排行榜、短剧、主讲人讲解、旁白演示，体裁之间也可以组合。
+
+## 安装
+
+在电脑的终端（Windows 上是 PowerShell 或命令提示符）里运行：
 
 ```bash
 npx skills add EmergenAI/video-recut -g
 ```
 
-`-g` installs the Skill in your user folder, so your agent can use it in every project. Without it,
-the Skill is installed only into the folder you run the command in. The installer asks which agents
-to install for.
+安装时会问你要装给哪个 AI 助手，选你在用的那个即可。
 
-Before the first video you need Node.js 22 or newer, FFmpeg and ffprobe on your PATH, and your own
-Bibei open-platform key with credits (https://www.bibei.cn/app/open-platform). The agent checks each
-of these and walks you through anything missing; the Skill pays for no generation.
+`-g` 表示装到你的用户目录，以后在任何文件夹里都能用。不加 `-g`，就只装进你运行命令时所在的那个文件夹。
 
-## What is inside
+## 开始之前要准备的
 
-- `SKILL.md`: the Skill's entry point
-- `guides/`: directing and production knowledge the agent reads as needed, in the order of the work
-  (`1-setup`, `2-plan`, `3-materials`, `4-compose`, `5-deliver`), plus `formats/` and worked `examples/`
-- `scripts/`: `bibei.mjs` (generation), `timeline.mjs` (speech timing), `render.mjs` (render and review),
-  `check.mjs` (delivery checks a final render runs against the production's `plan.json`)
+| 准备什么 | 说明 |
+|---|---|
+| Node.js 22 或更新版本 | 运行渲染和生成脚本 |
+| FFmpeg 和 ffprobe | 处理音视频素材 |
+| 你自己的必贝开放平台密钥和积分 | 图片、视频、配音和逐字对时都在你的必贝账号上生成和计费。在 [必贝开放平台](https://www.bibei.cn/app/open-platform) 创建密钥时，把「生图」「生视频」「语音合成」「语音对齐」四项权限都勾上 |
+| 一个固定版本的渲染浏览器 | 第一次渲染前由 AI 助手下载一次 |
+| 可选：yt-dlp | 只在需要从链接下载参考视频时用到 |
 
-Setup: run `npm install` in `scripts/`, then `node scripts/render.mjs doctor`. Each user connects
-their own Bibei key on first use (`node scripts/bibei.mjs key`). See `THIRD_PARTY_NOTICES.md` for the
-software the scripts install and use.
+不用自己一项项去装。第一次使用时，AI 助手会逐项检查，缺什么就一步步带你补上。
 
-## License
+**费用说明**：这个 Skill 本身免费，不代付任何生成费用。每次要花钱之前，AI 助手都会先和你确认用哪个账号、做哪些内容、预算多少，之后不会超出这个范围。
 
-MIT, see `LICENSE`. Third-party software the scripts install keeps its own license
-(`THIRD_PARTY_NOTICES.md`).
+## 装好之后怎么用
+
+直接用平常说话的方式告诉你的 AI 助手，例如：
+
+- "用 Video Recut，给我们的冷萃咖啡做一条 30 秒的竖屏上新视频。"
+- "照这条视频的节奏和剪法，换成我们的产品重新做一条。"（附上视频链接或文件）
+- "这是我昨天拍的几段口播，帮我剪成一条带字幕的短视频。"
+
+它会先给你看方案和预算，你确认后才开始生成；做的过程中会给你看草稿，最后交付成片。
+
+## 它是怎么做出一支片子的
+
+1. **图片和视频**：在你的必贝账号上生成，所有请求都有记录，同样的请求不会重复扣费。
+2. **配音**：账号里有语音模型就用必贝配音，否则用 AI 助手自带的语音工具或你指定的服务。
+3. **逐字对时**：测出每个字是在第几秒说出来的。字幕、印章、切镜都绑在对应的字上，改了台词或重新配音，它们会跟着字走。
+4. **素材处理**：用 FFmpeg 剪切、转换格式。
+5. **合成与渲染**：所有画面、字幕和动效写在一个 HTML 页面里，再渲染成视频。想改哪里，改页面重新渲染即可，只花时间不花钱。
+6. **交付检查**：正式渲染前，先对照一开始定下的计划做检查：镜头是否都在、时长是否对得上、声音是否都有来源。有一项不过就不出片。
+
+## 目录说明
+
+- `SKILL.md`：技能的入口，AI 助手每次都会先读它
+- `guides/`：导演和制作知识，按工作顺序分为准备（`1-setup`）、策划（`2-plan`）、素材（`3-materials`）、合成（`4-compose`）、交付（`5-deliver`），另有体裁打法（`formats/`）和完整示例（`examples/`）
+- `scripts/`：`bibei.mjs`（生成与配音）、`timeline.mjs`（逐字时间线）、`render.mjs`（渲染与审片）、`check.mjs`（交付检查）
+
+## 许可证
+
+MIT，见 `LICENSE`。脚本安装和调用的第三方软件各自遵循其许可证，见 `THIRD_PARTY_NOTICES.md`。
