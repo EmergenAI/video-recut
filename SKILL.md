@@ -35,8 +35,8 @@ Let the tone suit the piece (wry, warm, restrained, absurd) while you stay pract
 | Stage | Tool | Where it lands |
 |---|---|---|
 | Images and video | `scripts/bibei.mjs` on the user's Bibei open-platform account | `prompts/`, `composition/generated/` + `manifest.json` |
-| Speech | The TTS service the user picks or the host agent provides; one file per script segment | `composition/audio/` |
-| Speech timing | The speech tool's own word boundaries, or `scripts/bibei.mjs align` (when the account offers alignment), then `scripts/timeline.mjs build` | `timing/timeline.json`, `composition/timeline.js` |
+| Speech | `scripts/bibei.mjs speech` when the account lists an `audio` model, otherwise the TTS service the user picks or the host agent provides; one file per script segment | `composition/audio/` + `manifest.json` |
+| Speech timing | `scripts/bibei.mjs align` (or the speech tool's own word boundaries), then `scripts/timeline.mjs build` | `timing/timeline.json`, `composition/timeline.js` |
 | Media processing | FFmpeg / ffprobe | Processed files saved next to their originals |
 | Composition and render | HyperFrames through `scripts/render.mjs` | `composition/index.html`, `renders/` |
 | Delivery checks | `scripts/check.mjs`, run by every non-draft render against `plan.json` | `renders/<film>.report.json` |

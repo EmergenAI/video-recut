@@ -46,7 +46,7 @@ video they asked for stops there.
 ## Connecting the Bibei account
 
 Run `bibei.mjs key` at the start of the work. When no key is configured, guide the user as soon as
-the plan needs generated images, video or word timing. Choose the route by what the user can do:
+the plan needs generated images, video, a voice or word timing. Choose the route by what the user can do:
 
 - **Default route, for everyone:** run `bibei.mjs key --open` yourself. It creates the key file and
   opens it in the system text editor (Notepad on Windows, TextEdit on macOS); the user pastes and
@@ -63,7 +63,7 @@ Example, adapted to the user's words and host:
 >
 > 1. 打开 https://www.bibei.cn/app/open-platform ，登录你的必倍账号（没有账号先注册）。登录后也可以从右上角头像菜单里点「开放平台」进入。
 > 2. 在「API Key」这一栏点「创建 Key」。
-> 3. 名称随便填，比如「做视频」。权限勾选「生图」和「生视频」。「每日积分上限」建议先设 1000，防止意外多花（创建后不能改，想改只能再建一个）。有效天数保持默认就行。
+> 3. 名称随便填，比如「做视频」。权限把「生图」「生视频」「语音合成」「语音对齐」四项都勾上。「每日积分上限」建议先设 1000，防止意外多花（创建后不能改，想改只能再建一个）。有效天数保持默认就行。
 > 4. 用「密码」或「短信」验证一下身份，然后确认。
 > 5. 页面会弹出「复制 Key」窗口，里面那一长串字符就是你的密钥，**只显示这一次**。点「复制 Key」。
 > 6. 我已经在你电脑上打开了一个空白的记事本窗口。把密钥粘贴进去，按 Ctrl+S 保存，再关掉记事本。最后回到网页点「我已保存」。
@@ -75,9 +75,14 @@ After they reply, run `bibei.mjs key` and `bibei.mjs balance`, then report in th
 usual causes are an unsaved file or the token pasted with extra text; ask about those one at a time
 and offer to open the file again. Never ask them to show you the file's contents.
 
-When the page reads "管理员尚未开启开放平台的生成能力" or "生图与生视频尚未对外开放", or the 「生图」
-「生视频」 permissions cannot be ticked, generation is not open to this account yet. Say so plainly,
-and continue with the parts that need no generation.
+When the page reads "管理员尚未开启开放平台的生成能力" or "…尚未对外开放", or the permissions cannot be
+ticked, generation is not open to this account yet. Say so plainly, and continue with the parts that
+need no generation.
+
+A key made earlier may lack 「语音合成」 or 「语音对齐」: permissions are fixed when a key is made. When a
+request answers `TOKEN_SCOPE_DENIED`, tell the user in their terms that the old key cannot make voices
+or timing, and walk them through the same steps again with all four ticked; the new key replaces the
+old one in the same file.
 
 ## Points, recharge and daily limits
 

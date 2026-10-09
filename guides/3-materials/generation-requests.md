@@ -49,14 +49,15 @@ them to the user instead of retrying.
 ## Bibei models and limits
 
 `bibei.mjs models` lists the model keys this account offers, with pricing, grouped by medium (`image`,
-`video`, and `alignment` once offered). Model keys differ between accounts; always pass a key from that
+`video`, `audio` and `alignment`). Model keys differ between accounts; always pass a key from that
 list, never a model's display name. The facts known at the time of writing:
 
 | Medium | Models seen | Request limits |
 | --- | --- | --- |
 | Image | GPT Image 2, Nano Banana 2, Nano Banana Pro | Reference images: at most 10 (GPT Image 2), 14 (Nano Banana 2), 8 (Nano Banana Pro). `--size WxH` and/or `--ratio`; some models take preset sizes only (GPT Image 2 1K presets include 720x1280 for 9:16, 1024x1024 for 1:1, 1280x720 for 16:9). The result may be larger than asked at the same ratio (720x1280 returned 941x1672). No background or output-format choice. |
 | Video | MiniMax H3 (the AutoDL workflow `minimax_h3_image_audio_to_video_v2_15s`) | `--resolution 768p` (default) or `480p`; whole seconds from 1 to 15 per shot (not per film); up to 9 reference images and 3 reference audio files; no reference video, no first or last frame. Bibei accepts ratios 9:16, 3:4, 2:3, 4:5, 16:9, 4:3, 3:2, 5:4 (no 21:9 or 1:1), but the workflow itself only outputs portrait or landscape, so treat every other ratio as "portrait or landscape, then crop in the composition" until a result shows otherwise. |
-| Alignment | Being built on Bibei | Check `models` for an `alignment` group. Until it exists, timing is estimated. |
+| Speech | Doubao speech (`audio` group) | One segment per request, at most `input.maxChars` characters; voice id from `input.voices`; speed 0.5–2; `wav` or `mp3`. Priced per characters. |
+| Alignment | Doubao recognition with per-character times (`alignment` group) | One WAV per request (the script converts), at most `input.maxDurationSeconds`; optional known words; WhisperX-shaped result. Priced per seconds of audio. Without an `alignment` group, timing is estimated. |
 
 Every reference file must be 10 MB or smaller; JPEGs of a few hundred KB are enough. The script
 uploads the bytes, so you need no public host, but Bibei must serve them to the video workflow at a
@@ -152,9 +153,18 @@ for different results. A request cannot trim, retime or extract audio from its o
 
 ## Speech
 
-There is no bundled TTS script. Speech comes from the service the user chose or from the host's own
-speech tool; [Speech (TTS)](../1-setup/services.md#speech-tts) records which one this production
-uses. Whatever the service, the result must satisfy the production:
+Speech comes from Bibei (`bibei.mjs speech`, when the account lists an `audio` model), from the
+service the user chose, or from the host's own speech tool; [Speech (TTS)](../1-setup/services.md#speech-tts)
+records which one this production uses and in what order to choose. A Bibei segment:
+
+```bash
+node <skill>/scripts/bibei.mjs speech s1 --model <audio model key> --text-file prompts/s1.speech.txt --voice <voice id> --format wav
+```
+
+Keep the text you send in `prompts/<segment-id>.speech.txt` even when it equals the displayed text: the
+file is the request of record, and a changed file is a new, paid request. Take the voice id from the
+model's `input.voices` in `bibei.mjs models`; the voice you cast stays the same id for every segment of
+that speaker. Whatever the service, the result must satisfy the production:
 
 - **One file per script segment**, saved as `composition/audio/<segment-id>.wav` (another format the
   service returns is fine; convert with ffmpeg if needed), and named in that segment's `audio` field in
@@ -183,11 +193,13 @@ ffprobe -v error -show_entries format=duration -of csv=p=0 composition/audio/s1.
 Then align each segment so captions and word-linked events get measured times:
 
 ```bash
-node <skill>/scripts/bibei.mjs align s1 composition/audio/s1.wav --language zh --dir composition/generated
+node <skill>/scripts/bibei.mjs align s1 composition/audio/s1.wav --language zh --text-file prompts/s1.speech.txt --dir composition/generated
 ```
 
 `align` converts the speech to 16 kHz mono WAV with ffmpeg, submits it and writes
-`composition/generated/s1.alignment.json`; name that file in the segment's `alignment` field. Pass the
+`composition/generated/s1.alignment.json`; name that file in the segment's `alignment` field. Giving the
+words that were spoken (`--text-file`) makes the times follow them; without it the service recognizes
+the words itself, which is what a reference needs. Pass the
 spoken language explicitly (`zh`, `en`, `ko`, …). `--model` is optional. Alignment is a paid request
 like the others and falls under the same agreement. If `align` reports that alignment is not available,
 the account has no `alignment` group yet: leave `alignment` out of the segment, and `timeline.mjs` will

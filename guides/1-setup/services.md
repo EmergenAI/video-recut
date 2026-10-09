@@ -15,8 +15,8 @@ without another call.
 | Part of the work | Service | How it is reached |
 | --- | --- | --- |
 | Images, video | Bibei open platform | `scripts/bibei.mjs image` / `video` |
-| Speech timing (alignment) | The speech tool's own word boundaries, or Bibei alignment while offered | A converted boundary file, or `scripts/bibei.mjs align` |
-| Speech (TTS) | The host agent's own speech tool, or a service the user chooses | That tool or service; no bundled script |
+| Speech timing (alignment) | Bibei alignment, or the speech tool's own word boundaries | `scripts/bibei.mjs align`, or a converted boundary file |
+| Speech (TTS) | Bibei speech when the account lists it, else the host agent's own speech tool or a service the user chooses | `scripts/bibei.mjs speech`, or that tool or service |
 | Media processing, probing, sheets | FFmpeg / ffprobe on this machine | Direct commands and `scripts/render.mjs` |
 | Composition and rendering | HyperFrames on this machine | `scripts/render.mjs` |
 | Reference download | yt-dlp on this machine | Direct command |
@@ -72,7 +72,7 @@ is over, or every later request goes to the local server.
 ## Bibei capabilities and limits
 
 `node <skill>/scripts/bibei.mjs models` lists the model keys this account can use, grouped by medium
-(`image`, `video`, and `alignment` once it is offered), with their pricing. Model keys differ between
+(`image`, `video`, `audio` for speech and `alignment`), with their pricing and input limits. Model keys differ between
 accounts; always take the key from this listing rather than from memory. What follows was observed in
 the existing integration; the listing is the current truth.
 
@@ -106,7 +106,18 @@ the existing integration; the listing is the current truth.
   runs one, so video clips are generated one after another (about 2–3 minutes each, measured
   2026-09-24). Plan and quote waiting time from that queue, and submit early
   ([submit early, collect as results arrive](../3-materials/generation-requests.md#submit-early-collect-as-results-arrive)).
-- **Alignment**: a draft capability; see [Alignment](#alignment).
+- **Speech**: Doubao speech (for example a key under the `audio` group). A request carries the exact
+  words of one segment, a voice id from that model's `input.voices`, a speed from 0.5 to 2 and `wav` or
+  `mp3`. One request may hold at most `input.maxChars` characters; split a longer segment at a sentence
+  boundary. Priced by characters (`pricing.mode` `per_chars`: every `charsPerUnit` characters or part of
+  them cost `pointsPerUnit`). Usually done within seconds.
+- **Alignment**: speech recognition with per-character times, delivered as WhisperX-shaped JSON. It
+  takes WAV only (`bibei.mjs align` converts the file first), at most `input.maxDurationSeconds` per
+  request, and optionally the segment's known words, which make Chinese timing tighter. Priced by audio
+  length (`pricing.mode` `per_seconds`). See [Alignment](#alignment).
+- **Permissions**: every capability is a separate permission on the key: 生图, 生视频, 语音合成 and
+  语音对齐. A key made before a permission existed never gains it; the fix is a new key with all four
+  ticked ([guiding the user](guiding-the-user.md#connecting-the-bibei-account)).
 
 `bibei.mjs` refuses a video request outside these limits before anything is uploaded or charged.
 [Bibei models and limits](../3-materials/generation-requests.md#bibei-models-and-limits) turns them into request
@@ -114,15 +125,25 @@ choices.
 
 ## Speech (TTS)
 
-There is no bundled speech script. Choose the speech source in this order:
+Choose the speech source in this order:
 
 1. a service the user or the project already named;
-2. the host agent's own speech tool (for example Doubao's);
-3. otherwise, tell the user the video has spoken words and you cannot make a voice alone, and offer
+2. Bibei speech, when `bibei.mjs models` lists an `audio` model: it bills the same account as the
+   pictures, needs no second sign-up, and keeps every segment on one fixed voice id;
+3. the host agent's own speech tool (for example Doubao's);
+4. otherwise, tell the user the video has spoken words and you cannot make a voice alone, and offer
    the options ([guiding the user](guiding-the-user.md#speech-when-the-host-has-no-voice-tool)).
 
-Follow that tool's or service's own documentation for the request, and let the user choose when a new
-account or cost is involved. Record the chosen service and voice in `BRIEF.md`, and the casting
+With Bibei, render each segment from its spoken form of record:
+
+```bash
+node <skill>/scripts/bibei.mjs speech s1 --model <audio model key> --text-file prompts/s1.speech.txt --voice <voice id> --format wav
+```
+
+It writes `composition/audio/s1.wav` and records the request in `composition/audio/manifest.json`; the
+same words, voice and settings return the saved file without charging again. Pass the same `--voice`,
+`--speed` and `--format` to every segment of one speaker. With any other tool or service, follow its own
+documentation, and let the user choose when a new account or cost is involved. Record the chosen service and voice in `BRIEF.md`, and the casting
 reasoning in `TREATMENT.md`; [voice direction](../3-materials/voices.md) owns that choice.
 
 Whatever produces it, the speech must satisfy what the rest of the production relies on:
@@ -156,14 +177,17 @@ rendered again. [Speech](../3-materials/generation-requests.md#speech) covers th
 
 ## Alignment
 
-Alignment turns a speech file into measured word times. Bibei's alignment endpoint is a draft API
-still being built: before relying on it, run `bibei.mjs models` and look for an `alignment` group. If
-it is absent, `bibei.mjs align` reports that the endpoint is not available; that is a fact about the
-service, not a key problem.
+Alignment turns a speech file into measured word times. Run `bibei.mjs models` and look for an
+`alignment` group; when an account has none, `bibei.mjs align` reports that alignment is not available,
+which is a fact about that account, not a key problem.
 
-When it is available, `align` converts the speech to 16 kHz mono WAV with FFmpeg, uploads it (the
-10 MB upload limit reaches at roughly five minutes of speech) and writes `<name>.alignment.json`, a
-WhisperX-compatible result with per-character times for Chinese. Name that file in the segment's
+`align` converts the speech to 16 kHz mono WAV with FFmpeg, uploads it (the 10 MB upload limit reaches
+at roughly five minutes of speech; the model's `input.maxDurationSeconds` may be shorter) and writes
+`<name>.alignment.json`, a WhisperX-compatible result with per-character times for Chinese. When the
+words are known, as they are for your own segments, pass them with `--text-file prompts/s1.speech.txt`:
+the service then fits the times to those words instead of guessing them, which is tighter for Chinese.
+Leave it out for a reference whose words you do not have yet; the result's `text` is then the
+recognized transcript. Name that file in the segment's
 `alignment` field; `timeline.mjs` then takes the displayed words from the script and only the times
 from the alignment. Pass the spoken language explicitly (`--language zh`, `en`, …).
 
@@ -205,7 +229,7 @@ Bibei charges points to the key's account. Before paid work, turn the plan into 
 can accept:
 
 1. List the requests the remaining work needs: each image, each video shot with its duration, each
-   alignment. Count reuse: a request already finished in the manifest costs nothing again.
+   speech segment with its character count, each alignment with its audio length. Count reuse: a request already finished in the manifest costs nothing again.
 2. Price each from `bibei.mjs models`, in the units the listing states for that model.
 3. Allow for realistic iteration—a second version of a key shot, a revised image—and say so
    separately rather than hiding it in the total.
@@ -216,8 +240,9 @@ Present the estimate in points, with what it buys, and ask for agreement before 
 proposed estimate distinct from what the user accepts, and an estimate distinct from a ceiling. Record
 the accepted scope in `BRIEF.md` ([Brief](../2-plan/brief.md#brief-preserves-user-authority)) and
 keep the remaining cost in `PROGRESS.md` when it matters. Work inside that agreement without asking
-again for each command; return to the user when the plan grows beyond it. TTS cost belongs to its own
-service; mention it when the user's chosen service charges. `bibei.mjs` does not ask for confirmation
+again for each command; return to the user when the plan grows beyond it. Bibei speech and
+alignment are on the same bill; another TTS service's cost belongs to that service, so mention it when
+the user's chosen service charges. `bibei.mjs` does not ask for confirmation
 before spending: that conversation is yours. [Before paying](../3-materials/generation-requests.md#before-paying)
 applies it to each request.
 
@@ -236,6 +261,8 @@ and `bibei.mjs` prints the HTTP status, code and request id.
 | `TOKEN_DAILY_LIMIT_EXCEEDED` | The key reached its daily limit. Tell the user; the work can continue after the limit resets or with a limit they change. |
 | Model key unknown or rejected | Re-read `bibei.mjs models` and use a key the account lists. |
 | "Bibei alignment is not available" | The account or service does not offer alignment yet; use estimated timing and say so. |
+| `TOKEN_SCOPE_DENIED` | The key lacks the permission for this request (often a key made before 语音合成 / 语音对齐 existed). Guide the user to make a new key with all four permissions; retrying will not help. |
+| "speech … not available" | The account lists no `audio` model; use the host's speech tool or the user's service. |
 | A reference-image video fails within seconds with a likely-cause hint | The Bibei server cannot serve the references to the video workflow. Changing the prompt will not help; tell the user and let them choose (text-only shots, or waiting). |
 | Reference over 10 MB | Reduce the file locally ([Image operations](../3-materials/media-prep.md#image-operations)) and submit again. |
 | "rate limited; retrying" | Normal; the script waits and continues. |

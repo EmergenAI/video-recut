@@ -7,7 +7,9 @@
 //                                [--ref a.jpg --ref b.png]
 //   node bibei.mjs video <name> --model <key> --prompt-file <txt> --duration 6 [--ratio 9:16]
 //                                [--resolution 768p|480p] [--ref-image a.jpg] [--ref-audio v.mp3]
-//   node bibei.mjs align <name> <speech-audio> --language zh [--model <key>]
+//   node bibei.mjs speech <segment id> --model <key> --text-file <txt> [--voice <id>] [--speed 1]
+//                                [--format wav|mp3]   (default --dir composition/audio)
+//   node bibei.mjs align <name> <speech-audio> --language zh [--text-file <txt>] [--model <key>]
 //   node bibei.mjs wait <name> | status [<name>]
 //   node bibei.mjs wait-all [<name> ...]   (waits for every unfinished task at once and downloads
 //                                  each result the moment it is ready; one failure does not stop the rest)
@@ -16,7 +18,7 @@
 //                                  for the user to paste the token into; never reads it)
 //   node bibei.mjs login          (the user runs this in their own terminal to save the key)
 // Common flags: --dir <generated dir> (default composition/generated, run from the production root), --no-wait, --replace.
-// Confirm paid scope with the user before running image/video/align; this script does not ask.
+// Confirm paid scope with the user before running image/video/speech/align; this script does not ask.
 // Key, first found: BIBEI_API_KEY, the file BIBEI_API_KEY_FILE names, or ~/.config/video-director/
 // bibei-key. API root: BIBEI_BASE_URL, else ~/.config/video-director/bibei-base-url, else
 // https://www.bibei.cn/api.
@@ -45,6 +47,7 @@ const VIDEO_RATIOS = new Set(["9:16", "3:4", "2:3", "4:5", "16:9", "4:3", "3:2",
 const MAX_VIDEO_SECONDS = 15;
 const MAX_VIDEO_IMAGES = 9;
 const MAX_VIDEO_AUDIOS = 3;
+const SPEECH_FORMATS = new Set(["wav", "mp3"]);
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "degraded"]);
 const POLL_MS = Number(process.env.BIBEI_POLL_MS ?? 10_000);
 const WAIT_LIMIT_MS = 40 * 60_000;
@@ -93,8 +96,9 @@ const SETUP = `No Bibei key is configured.
 Agent: do not relay this text as it is. Walk the user through it in plain words, one step at a time,
 as guides/1-setup/guiding-the-user.md requires; run \`bibei.mjs key --open\` for them.
 The user sets it up once, without sharing it in chat:
-  1. Sign in at ${KEY_PAGE} (register first if needed), click 创建 Key under API Key, tick 生图
-     and 生视频, and copy the key; it is shown only once.
+  1. Sign in at ${KEY_PAGE} (register first if needed), click 创建 Key under API Key, tick 生图,
+     生视频, 语音合成 and 语音对齐, and copy the key; it is shown only once. A key made before
+     语音合成 / 语音对齐 existed does not gain them: make a new key with all four ticked.
   2. Save it in one of these ways:
      - simplest: run \`bibei.mjs key --open\`; a text editor opens an empty file, the user pastes the
        token, saves and closes it
@@ -285,9 +289,31 @@ function requestKey(kind, identity) {
   return `vd-${createHash("sha256").update(JSON.stringify(canonical)).digest("hex").slice(0, 40)}`;
 }
 
+async function readTextFile(flags, required) {
+  if (typeof flags["text-file"] === "string") {
+    if (!existsSync(flags["text-file"])) fail(`text file not found: ${flags["text-file"]}`);
+    return (await readFile(flags["text-file"], "utf8")).trim();
+  }
+  if (typeof flags.text === "string") return flags.text.trim();
+  if (required) fail("give the words with --text-file <txt> (preferred: it stays in the project) or --text");
+  return "";
+}
+
 async function prepareGeneration(kind, name, flags) {
   if (!name || !/^[\w.-]+$/u.test(name)) fail("give a name made of letters, digits, '-', '_' or '.'");
   if (typeof flags.model !== "string") fail("--model <key> is required; list the account's keys with `bibei.mjs models`");
+  if (kind === "speech") {
+    const text = await readTextFile(flags, true);
+    if (!text) fail("the speech text is empty");
+    const format = typeof flags.format === "string" ? flags.format.toLowerCase() : "wav";
+    if (!SPEECH_FORMATS.has(format)) fail("--format takes wav or mp3");
+    const speed = flags.speed === undefined ? 1 : Number(flags.speed);
+    if (!Number.isFinite(speed) || speed < 0.5 || speed > 2) fail("--speed takes a rate from 0.5 to 2 (1 is normal)");
+    return {
+      model: flags.model, text, format, speed,
+      ...(typeof flags.voice === "string" ? { voice: flags.voice } : {}),
+    };
+  }
   const prompt = await readPrompt(flags);
   if (kind === "image") {
     const spec = {
@@ -347,17 +373,32 @@ async function submit(kind, spec, idempotency, dir) {
     };
     return call("/videos", { method: "POST", body: JSON.stringify(body), headers: { "idempotency-key": idempotency } });
   }
+  if (kind === "speech") {
+    const body = {
+      modelKey: spec.model, text: spec.text, format: spec.format, speed: spec.speed,
+      ...(spec.voice ? { voice: spec.voice } : {}),
+    };
+    return call("/audios", { method: "POST", body: JSON.stringify(body), headers: { "idempotency-key": idempotency } });
+  }
   const audioAssetId = await assetFor(dir, spec.evidence, `align-evidence:${spec.sourceSha256}`);
-  const body = { modelKey: spec.model, audioAssetId, language: spec.language };
+  // Without --model the account's default alignment model is used; "default" is not a model key.
+  const body = {
+    ...(spec.model !== "default" ? { modelKey: spec.model } : {}),
+    audioAssetId, language: spec.language,
+    ...(spec.text ? { text: spec.text } : {}),
+  };
   return call("/alignments", { method: "POST", body: JSON.stringify(body), headers: { "idempotency-key": idempotency } });
 }
 
 function extensionFor(mediaType, url, kind) {
-  const byType = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "video/mp4": ".mp4", "video/quicktime": ".mov" };
+  const byType = {
+    "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "video/mp4": ".mp4", "video/quicktime": ".mov",
+    "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/wave": ".wav", "audio/mpeg": ".mp3",
+  };
   if (byType[mediaType]) return byType[mediaType];
   const fromUrl = extname(new URL(url).pathname);
   if (fromUrl) return fromUrl;
-  return kind === "video" ? ".mp4" : ".png";
+  return kind === "video" ? ".mp4" : kind === "speech" ? ".wav" : ".png";
 }
 
 async function wait(entry, dir) {
@@ -496,7 +537,9 @@ async function evidenceWav(source) {
 }
 
 async function generate(kind, positional, flags) {
-  const dir = resolve(typeof flags.dir === "string" ? flags.dir : join("composition", "generated"));
+  // Speech lands where the script's segments name their audio: composition/audio/<segment id>.wav.
+  const defaultDir = kind === "speech" ? join("composition", "audio") : join("composition", "generated");
+  const dir = resolve(typeof flags.dir === "string" ? flags.dir : defaultDir);
   // The decision below uses this snapshot; every write re-reads the manifest under the lock.
   const manifest = await loadManifest(dir);
   const name = positional[0];
@@ -504,12 +547,18 @@ async function generate(kind, positional, flags) {
   let cleanup;
   if (kind === "align") {
     const source = positional[1];
-    if (!name || !source) fail("usage: align <name> <speech-audio> --language zh [--model <key>]");
+    if (!name || !source) fail("usage: align <name> <speech-audio> --language zh [--text-file <txt>] [--model <key>]");
     if (!existsSync(source)) fail(`audio not found: ${source}`);
     if (typeof flags.language !== "string" || !/^[a-z]{2,3}$/u.test(flags.language)) fail("--language takes an explicit code such as zh or en");
     const { out, work } = await evidenceWav(source);
     cleanup = work;
-    spec = { model: typeof flags.model === "string" ? flags.model : "default", language: flags.language, source: resolve(source), sourceSha256: await sha256(source), evidence: out };
+    // The known words make the timing more exact; the displayed words still come from the script.
+    const text = await readTextFile(flags, false);
+    spec = {
+      model: typeof flags.model === "string" ? flags.model : "default", language: flags.language,
+      source: resolve(source), sourceSha256: await sha256(source), evidence: out,
+      ...(text ? { text } : {}),
+    };
   } else {
     spec = await prepareGeneration(kind, name, flags);
   }
@@ -560,7 +609,7 @@ async function generate(kind, positional, flags) {
     if (retried) console.log(`${name}: previous attempt ${previous.status}; retrying as attempt ${attempt}`);
     const entry = {
       name, kind, request, attempt,
-      ...(kind === "align" ? { model: spec.model, language: spec.language, source: spec.source } : identity),
+      ...(kind === "align" ? { model: spec.model, language: spec.language, source: spec.source, ...(spec.text ? { withText: true } : {}) } : identity),
       submittedAt: new Date().toISOString(), status: "submitting",
     };
     const response = await submit(kind, kind === "align" ? spec : identity, idempotency, dir);
@@ -575,6 +624,8 @@ async function generate(kind, positional, flags) {
     if (error instanceof TaskError) fail(error.message);
     if (error instanceof BibeiError) {
       if (error.status === 404 && kind === "align") fail(`Bibei alignment is not available at ${API}/alignments (${error.code}); check \`bibei.mjs models\` for an "alignment" group`);
+      if (error.status === 404 && kind === "speech") fail(`Bibei speech is not available at ${API}/audios (${error.code}); check \`bibei.mjs models\` for an "audio" group`);
+      if (error.code === "TOKEN_SCOPE_DENIED") fail(`${error.message}\nThis key was made without the permission this request needs (${kind === "align" ? "语音对齐" : kind === "speech" ? "语音合成" : kind === "video" ? "生视频" : "生图"}). Walk the user through making a new key with 生图, 生视频, 语音合成 and 语音对齐 ticked (guides/1-setup/guiding-the-user.md).`);
       fail(STOP_CODES.has(error.code) ? `${error.message}\nThis is an account limit: tell the user instead of retrying.` : error.message);
     }
     throw error;
@@ -592,6 +643,7 @@ try {
     case "login": await login(); break;
     case "image": await generate("image", rest, flags); break;
     case "video": await generate("video", rest, flags); break;
+    case "speech": await generate("speech", rest, flags); break;
     case "align": await generate("align", rest, flags); break;
     case "wait": {
       const dir = resolve(typeof flags.dir === "string" ? flags.dir : join("composition", "generated"));
