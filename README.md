@@ -1,4 +1,4 @@
-# video-recut
+# Video Recut
 
 An Agent Skill that directs and produces short videos from a brief, reference videos or supplied
 material. It generates images and video through the user's own Bibei account, uses the host agent's
