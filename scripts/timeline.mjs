@@ -303,7 +303,7 @@ async function build(scriptFile, flags) {
     cursor = start + audioDuration;
   }
   const duration = round(Math.max(...segments.map((s) => s.end)) + tail);
-  const timeline = { format: "video-director.timeline@1", language, duration, segments };
+  const timeline = { format: "video-recut.timeline@1", language, duration, segments };
   const out = resolve(typeof flags.out === "string" ? flags.out : resolve(base, "timing", "timeline.json"));
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, `${JSON.stringify(timeline, null, 2)}\n`);

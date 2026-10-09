@@ -1,16 +1,16 @@
-# video-director
+# video-recut
 
 An Agent Skill that directs and produces short videos from a brief, reference videos or supplied
 material. It generates images and video through the user's own Bibei account, uses the host agent's
 speech tool (or a TTS service the user names), and composes and renders the result as an HTML
 composition with HyperFrames and FFmpeg.
 
-Website: https://emergenai.github.io/video-director/
+Website: https://emergenai.github.io/video-recut/
 
 ## Install
 
 ```bash
-npx skills add EmergenAI/video-director -g
+npx skills add EmergenAI/video-recut -g
 ```
 
 `-g` installs the Skill in your user folder, so your agent can use it in every project. Without it,

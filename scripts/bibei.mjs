@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bibei open-platform client for the video-director Skill. Every paid request is recorded in a
+// Bibei open-platform client for the video-recut Skill. Every paid request is recorded in a
 // manifest before waiting, so an interrupted run resumes the same task instead of paying again.
 //
 //   node bibei.mjs models | balance
@@ -19,9 +19,10 @@
 //   node bibei.mjs login          (the user runs this in their own terminal to save the key)
 // Common flags: --dir <generated dir> (default composition/generated, run from the production root), --no-wait, --replace.
 // Confirm paid scope with the user before running image/video/speech/align; this script does not ask.
-// Key, first found: BIBEI_API_KEY, the file BIBEI_API_KEY_FILE names, or ~/.config/video-director/
-// bibei-key. API root: BIBEI_BASE_URL, else ~/.config/video-director/bibei-base-url, else
-// https://www.bibei.cn/api.
+// Key, first found: BIBEI_API_KEY, the file BIBEI_API_KEY_FILE names, or ~/.config/video-recut/
+// bibei-key. API root: BIBEI_BASE_URL, else ~/.config/video-recut/bibei-base-url, else
+// https://www.bibei.cn/api. Files saved under ~/.config/video-director/ (the Skill's earlier name)
+// are still read when the new folder has none.
 
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -32,12 +33,16 @@ import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // A file every host agent's shell can read, whatever environment that agent passes to it.
-const DEFAULT_KEY_FILE = join(homedir(), ".config", "video-director", "bibei-key");
-// The API root: BIBEI_BASE_URL, else the first line of ~/.config/video-director/bibei-base-url (for hosts
+const CONFIG_DIR = join(homedir(), ".config", "video-recut");
+// The Skill was called video-director before; keys and settings saved there keep working.
+const LEGACY_CONFIG_DIR = join(homedir(), ".config", "video-director");
+const DEFAULT_KEY_FILE = join(CONFIG_DIR, "bibei-key");
+const LEGACY_KEY_FILE = join(LEGACY_CONFIG_DIR, "bibei-key");
+// The API root: BIBEI_BASE_URL, else the first line of ~/.config/video-recut/bibei-base-url (for hosts
 // whose shells carry no custom environment, such as testing against a local Bibei), else production.
-const BASE_URL_FILE = join(homedir(), ".config", "video-director", "bibei-base-url");
+const BASE_URL_FILE = [join(CONFIG_DIR, "bibei-base-url"), join(LEGACY_CONFIG_DIR, "bibei-base-url")].find((f) => existsSync(f));
 const BASE = (process.env.BIBEI_BASE_URL?.trim()
-  || (existsSync(BASE_URL_FILE) ? readFileSync(BASE_URL_FILE, "utf8").split(/\r?\n/u)[0].trim() : "")
+  || (BASE_URL_FILE ? readFileSync(BASE_URL_FILE, "utf8").split(/\r?\n/u)[0].trim() : "")
   || "https://www.bibei.cn/api").replace(/\/+$/u, "");
 // Where the user creates a key: the Open Platform page of the site that serves this API root.
 const KEY_PAGE = `${/\/api$/u.test(BASE) ? BASE.slice(0, -4) : "https://www.bibei.cn"}/app/open-platform`;
@@ -84,7 +89,7 @@ function parse(argv) {
 // Finds the key without reading it into any output. Returns { value, source } or { source: undefined }.
 async function findKey() {
   if (process.env.BIBEI_API_KEY?.trim()) return { value: process.env.BIBEI_API_KEY, source: "BIBEI_API_KEY" };
-  for (const file of [process.env.BIBEI_API_KEY_FILE, DEFAULT_KEY_FILE].filter(Boolean)) {
+  for (const file of [process.env.BIBEI_API_KEY_FILE, DEFAULT_KEY_FILE, LEGACY_KEY_FILE].filter(Boolean)) {
     if (!existsSync(file)) continue;
     const value = await readFile(file, "utf8");
     if (value.trim()) return { value, source: file };
@@ -202,7 +207,7 @@ async function call(path, init = {}, attempt = 0) {
 
 async function loadManifest(dir) {
   const file = join(dir, "manifest.json");
-  if (!existsSync(file)) return { file, data: { format: "video-director.generated@1", entries: {} } };
+  if (!existsSync(file)) return { file, data: { format: "video-recut.generated@1", entries: {} } };
   return { file, data: JSON.parse(await readFile(file, "utf8")) };
 }
 

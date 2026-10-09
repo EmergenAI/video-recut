@@ -66,7 +66,7 @@ and holds its implementation. Keep them separate even when they sit side by side
   renders/              drafts, finals, review sheets
   tools/                helper scripts written for this production (optional)
 
-~/.config/video-director/   per user, outside every production
+~/.config/video-recut/      per user, outside every production
   bibei-key             the user's Bibei key, put there by the user (never by you)
   bibei-base-url        optional: a non-production API root, for local testing only
 ```

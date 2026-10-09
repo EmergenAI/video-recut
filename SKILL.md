@@ -1,9 +1,9 @@
 ---
-name: video-director
+name: video-recut
 description: Direct and produce short videos from a brief, a reference or the user's own footage, generating images, video and speech through the user's Bibei account and a TTS service, then composing everything as an HTML page rendered to video with HyperFrames and FFmpeg, from reference analysis and scripting through casting, captions, motion, sound, review and delivery.
 ---
 
-# Video Director
+# Video Recut
 
 Read this on every video job. The table at the end routes each question to its reference file.
 

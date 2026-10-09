@@ -35,7 +35,8 @@ finds:
 
 1. `BIBEI_API_KEY`, the key itself, in the environment of the shell that runs it;
 2. the file `BIBEI_API_KEY_FILE` names;
-3. the key file `~/.config/video-director/bibei-key`.
+3. the key file `~/.config/video-recut/bibei-key` (a key saved earlier in `~/.config/video-director/`, the
+   Skill's previous name, is still read).
 
 The user creates the key on Bibei's Open Platform page, `<site>/app/open-platform` for the site
 serving the API root (in production https://www.bibei.cn/app/open-platform), and puts it in place
@@ -65,7 +66,7 @@ node <skill>/scripts/bibei.mjs balance
 limit. Points are charged to the account the key belongs to.
 
 The API root is, first found: `BIBEI_BASE_URL`, the first line of
-`~/.config/video-director/bibei-base-url`, or `https://www.bibei.cn/api`. The file exists for testing
+`~/.config/video-recut/bibei-base-url`, or `https://www.bibei.cn/api`. The file exists for testing
 against a local Bibei from a host whose shell carries no custom environment; delete it when the test
 is over, or every later request goes to the local server.
 

@@ -1,8 +1,8 @@
 {
-  "name": "video-director-render",
+  "name": "video-recut-render",
   "private": true,
   "type": "module",
-  "description": "Render tooling for the video-director Skill: HyperFrames compositions to MP4.",
+  "description": "Render tooling for the video-recut Skill: HyperFrames compositions to MP4.",
   "engines": {
     "node": ">=22"
   },

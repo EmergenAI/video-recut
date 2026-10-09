@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Render tooling for the video-director Skill. One file, no build step:
+// Render tooling for the video-recut Skill. One file, no build step:
 //   node render.mjs doctor
 //   node render.mjs prepare-browser [--mirror <base-url>]
 //   node render.mjs init <dir> [--width 1080] [--height 1920] [--id main]
@@ -288,7 +288,7 @@ async function render(positional, flags) {
     fail(`the film does not match plan.json; kept for review as ${rejected}`);
   }
   const report = {
-    format: "video-director.delivery-report@1",
+    format: "video-recut.delivery-report@1",
     output: resolve(out), createdAt: new Date().toISOString(), quality, fps,
     targetDuration: checked.plan.targetDuration,
     shots: checked.plan.shots.map((s) => ({ id: s.id, scene: s.scene })),

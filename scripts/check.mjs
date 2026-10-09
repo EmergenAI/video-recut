@@ -1,4 +1,4 @@
-// Delivery checks for the video-director Skill: a final render must realize the production's
+// Delivery checks for the video-recut Skill: a final render must realize the production's
 // plan.json. `render.mjs render` runs `preflight` before any non-draft render and `verifyOutput`
 // after it; `render.mjs check <composition-dir>` runs the preflight alone.
 //

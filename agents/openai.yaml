@@ -1,4 +1,4 @@
 interface:
-  display_name: "Video Director"
+  display_name: "Video Recut"
   short_description: "Direct and deliver videos from references or briefs"
-  default_prompt: "Use $video-director to make or revise the video from my brief and any supplied references."
+  default_prompt: "Use $video-recut to make or revise the video from my brief and any supplied references."
